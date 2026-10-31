@@ -63,3 +63,4 @@ document.getElementById('dqn').textContent=d.dqCount;document.getElementById('dq
 async function load(f){try{const r=await fetch(CONFIG.API_URL+'?action=data&token='+encodeURIComponent(CONFIG.TOKEN)+(f?'&force=1':''));const d=await r.json();if(d.error)throw new Error(d.error);render(d)}catch(e){document.getElementById('u').textContent='Error: '+e.message}}
 load(true);setInterval(()=>load(false),30000);
 </script></body></html>
+vvvvvvv
