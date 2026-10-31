@@ -1,0 +1,65 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0b1220;--card:#131c31;--b:#223052;--t:#e8eefc;--m:#8fa1c7;--g:#22d3a6;--r:#ff6b81;--y:#fbbf24;--bl:#4f8cff}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Roboto,sans-serif;background:radial-gradient(1200px 600px at 10% -10%,#1a2750,transparent),var(--bg);color:var(--t)}
+header{display:flex;justify-content:space-between;align-items:center;padding:18px 28px;border-bottom:1px solid var(--b)}
+h1{margin:0;font-size:22px;background:linear-gradient(90deg,#4f8cff,#22d3a6);-webkit-background-clip:text;color:transparent}
+.live{font-size:12px;color:var(--m)}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--g);margin-right:6px;animation:p 1.5s infinite}
+@keyframes p{50%{opacity:.25;transform:scale(1.5)}}button{background:#1d2b4f;color:var(--t);border:1px solid var(--b);border-radius:8px;padding:6px 12px;cursor:pointer}
+main{padding:20px 28px;display:grid;gap:16px}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.card{background:linear-gradient(160deg,#16213d,var(--card));border:1px solid var(--b);border-radius:14px;padding:16px;box-shadow:0 8px 24px #0006;animation:f .6s both}
+@keyframes f{from{opacity:0;transform:translateY(12px)}}
+.kpi small{color:var(--m);font-size:12px}.kpi b{display:block;font-size:24px;margin:6px 0}.kpi span{font-size:12px}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}.wide{grid-column:1/-1}
+h3{margin:0 0 10px;font-size:14px;color:var(--m);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+canvas{max-height:300px}table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:7px 8px;border-bottom:1px solid var(--b);text-align:right}
+th:first-child,td:first-child{text-align:left}th{color:var(--m)}.bar{height:8px;background:#22305a;border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--bl),var(--g))}
+.up{color:var(--g)}.dn{color:var(--r)}.dq{max-height:220px;overflow:auto;font-size:12px;color:var(--y)}.dq div{padding:3px 0;border-bottom:1px dashed var(--b)}
+</style></head><body>
+<header><div><h1>CFO Dashboard &middot; Revenue, Receivables &amp; MIS</h1><div class="live"><span class="dot"></span><span id="u">Loading…</span> &middot; auto-refresh 30s</div></div><button onclick="load(true)">Refresh now</button></header>
+<main><div class="kpis" id="kpis"></div>
+<div class="g2"><div class="card wide"><h3>Revenue: Actual vs Target (monthly, ex-GST)</h3><canvas id="c1"></canvas></div>
+<div class="card"><h3>Revenue by Partner</h3><canvas id="c2"></canvas></div>
+<div class="card"><h3>Revenue by Service Line</h3><canvas id="c3"></canvas></div>
+<div class="card"><h3>Retainer vs Transaction</h3><canvas id="c4"></canvas></div>
+<div class="card"><h3>Entity Split</h3><canvas id="c5"></canvas></div>
+<div class="card"><h3>Receivables Ageing</h3><canvas id="c6"></canvas></div>
+<div class="card"><h3>Pending by Line Manager (buckets)</h3><canvas id="c7"></canvas></div>
+<div class="card wide"><h3>Top 10 Clients by Revenue</h3><canvas id="c8"></canvas></div>
+<div class="card"><h3>Billed vs Collected</h3><canvas id="c9"></canvas></div>
+<div class="card"><h3>Expenses: Actual vs Budget</h3><canvas id="c10"></canvas><div id="enote" class="live"></div></div>
+<div class="card wide"><h3>Manager-wise Receivable Buckets</h3><div id="mt"></div></div>
+<div class="card wide"><h3>Top Overdue (&gt;60 days)</h3><div id="ot"></div></div>
+<div class="card wide"><h3>Data Quality Log (<span id="dqn"></span>)</h3><div class="dq" id="dq"></div></div></div></main>
+<script src="config.js"></script>
+<script>
+const P=['#4f8cff','#22d3a6','#fbbf24','#ff6b81','#a78bfa','#38bdf8','#fb923c','#f472b6','#84cc16','#94a3b8'];
+const fmt=n=>{const a=Math.abs(n),s=n<0?'-':'';return a>=1e7?s+'₹'+(a/1e7).toFixed(2)+' Cr':a>=1e5?s+'₹'+(a/1e5).toFixed(2)+' L':s+'₹'+Math.round(a).toLocaleString('en-IN')};
+Chart.defaults.color='#8fa1c7';Chart.defaults.borderColor='#223052';Chart.defaults.animation.duration=900;
+const CH={};function mk(id,cfg){if(CH[id]){CH[id].data=cfg.data;CH[id].update();return}CH[id]=new Chart(document.getElementById(id),cfg)}
+const tip={plugins:{tooltip:{callbacks:{label:c=>' '+(c.dataset.label||c.label)+': '+fmt(c.parsed.y??c.parsed.x??c.parsed)}}}};
+const pie=(id,o,t)=>mk(id,{type:t||'doughnut',data:{labels:Object.keys(o),datasets:[{data:Object.values(o),backgroundColor:P,borderWidth:0}]},options:{plugins:{legend:{position:'right'},tooltip:{callbacks:{label:c=>' '+c.label+': '+fmt(c.parsed)}}}}});
+function render(d){const k=d.k,ach=k.ytdBud?k.tot/k.ytdBud*100:0;
+document.getElementById('u').textContent='Updated '+d.updated;
+const kp=[['Actual Revenue',fmt(k.tot),k.cnt+' invoices (net of credit notes)'],
+['Target YTD',fmt(k.ytdBud),'<span class="'+(ach>=100?'up':'dn')+'">'+ach.toFixed(0)+'% achieved</span>'],
+['Projected (FY)',fmt(k.proj),'Full-year projection'],['Collected',fmt(k.received),'Collection '+(k.coll*100).toFixed(0)+'% of billed'],
+['Receivables',fmt(k.ap),'Per ageing sheet'],['&lt; 60 Days',fmt(k.lt60),'Current'],['&gt; 60 Days',fmt(k.gt60),'<span class="dn">'+(k.ap?k.gt60/k.ap*100:0).toFixed(0)+'% of receivables</span>'],
+['TDS',fmt(k.tds),'GST billed '+fmt(k.gst)],['Credit Notes',fmt(k.credit),(k.tot?k.credit/(k.tot+k.credit)*100:0).toFixed(1)+'% of gross'],['Data Issues',d.dqCount,'See log below']];
+document.getElementById('kpis').innerHTML=kp.map(x=>'<div class="card kpi"><small>'+x[0]+'</small><b>'+x[1]+'</b><span>'+x[2]+'</span></div>').join('');
+mk('c1',{data:{labels:d.months,datasets:[{type:'bar',label:'Actual',data:d.rev,backgroundColor:'#4f8cff',borderRadius:6},{type:'line',label:'Target',data:d.bud,borderColor:'#fbbf24',tension:.3}]},options:tip});
+pie('c2',d.partner);pie('c3',d.service,'pie');pie('c4',d.type);pie('c5',d.entity);
+mk('c6',{type:'bar',data:{labels:Object.keys(d.bt),datasets:[{label:'Pending',data:Object.values(d.bt),backgroundColor:['#22d3a6','#4f8cff','#fbbf24','#fb923c','#ff6b81','#b91c4c'],borderRadius:6}]},options:tip});
+const ms=Object.keys(d.mgr);mk('c7',{type:'bar',data:{labels:ms,datasets:Object.keys(d.bt).map((b,i)=>({label:b,data:ms.map(m=>d.mgr[m][b]||0),backgroundColor:['#22d3a6','#4f8cff','#fbbf24','#fb923c','#ff6b81','#b91c4c'][i]}))},options:{scales:{x:{stacked:true},y:{stacked:true}},plugins:tip.plugins}});
+mk('c8',{type:'bar',data:{labels:d.top.map(x=>x[0]),datasets:[{label:'Revenue',data:d.top.map(x=>x[1]),backgroundColor:P,borderRadius:6}]},options:{indexAxis:'y',...tip,plugins:{legend:{display:false},...tip.plugins}}});
+mk('c9',{type:'line',data:{labels:d.months,datasets:[{label:'Billed (incl. GST)',data:d.billed,borderColor:'#4f8cff',fill:true,backgroundColor:'#4f8cff22',tension:.3},{label:'Collected',data:d.recd,borderColor:'#22d3a6',fill:true,backgroundColor:'#22d3a622',tension:.3}]},options:tip});
+mk('c10',{type:'bar',data:{labels:d.months,datasets:[{label:'Budget',data:d.ebud,backgroundColor:'#fbbf24'},{label:'Actual',data:d.eact,backgroundColor:'#ff6b81'}]},options:tip});
+document.getElementById('enote').textContent=d.hasExp?'':'No expense data yet. Add a "Budget" sheet (Month | Revenue Budget | Expense Budget | Expense Actual).';
+const B=Object.keys(d.bt),mx=Math.max(...ms.map(m=>B.reduce((a,b)=>a+(d.mgr[m][b]||0),0)),1);
+document.getElementById('mt').innerHTML='<table><tr><th>Line manager</th>'+B.map(b=>'<th>'+b+'</th>').join('')+'<th>Total</th><th style="width:20%"></th></tr>'+ms.map(m=>{const t=B.reduce((a,b)=>a+(d.mgr[m][b]||0),0);return '<tr><td>'+m+'</td>'+B.map(b=>'<td>'+((d.mgr[m][b]||0)?fmt(d.mgr[m][b]):'-')+'</td>').join('')+'<td><b>'+fmt(t)+'</b></td><td><div class="bar"><i style="width:'+t/mx*100+'%"></i></div></td></tr>'}).join('')+'</table>';
+document.getElementById('ot').innerHTML='<table><tr><th>Client</th><th>Inv</th><th>Manager</th><th>Days</th><th>Pending</th></tr>'+d.over.map(o=>'<tr><td>'+o.client+'</td><td>'+o.inv+'</td><td>'+o.mgr+'</td><td class="dn">'+o.days+'</td><td>'+fmt(o.amt)+'</td></tr>').join('')+'</table>';
+document.getElementById('dqn').textContent=d.dqCount;document.getElementById('dq').innerHTML=d.dq.map(x=>'<div>'+x.replace(/</g,'&lt;')+'</div>').join('')||'No issues';}
+async function load(f){try{const r=await fetch(CONFIG.API_URL+'?action=data&token='+encodeURIComponent(CONFIG.TOKEN)+(f?'&force=1':''));const d=await r.json();if(d.error)throw new Error(d.error);render(d)}catch(e){document.getElementById('u').textContent='Error: '+e.message}}
+load(true);setInterval(()=>load(false),30000);
+</script></body></html>
